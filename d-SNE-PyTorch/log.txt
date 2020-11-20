@@ -1,0 +1,26 @@
+Trainer fully initialized. Starting training now...
+=============== Epoch 1/1000 In Progress ==============
+> /playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/model/loss.py(78)forward()
+-> if list(ft.keys()) != list(y.keys()):
+(Pdb) Traceback (most recent call last):
+  File "/playpen/zhen/install/miniconda/miniconda3/envs/pytorch14_py37/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/playpen/zhen/install/miniconda/miniconda3/envs/pytorch14_py37/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/__main__.py", line 164, in <module>
+    main()
+  File "/playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/__main__.py", line 73, in main
+    trainer.train()
+  File "/playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/agents.py", line 121, in train
+    self._train_epoch()
+  File "/playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/agents.py", line 146, in _train_epoch
+    loss = self.criterion(ft, y_pred, y, train_name)
+  File "/playpen/zhen/install/miniconda/miniconda3/envs/pytorch14_py37/lib/python3.7/site-packages/torch/nn/modules/module.py", line 532, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/model/loss.py", line 180, in forward
+    loss_dsne = self.loss_dsne(ft, y, train_name)
+  File "/playpen/zhen/install/miniconda/miniconda3/envs/pytorch14_py37/lib/python3.7/site-packages/torch/nn/modules/module.py", line 532, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/playpen/zhen/domain_adaptation/d-SNE-PyTorch/dsne_pytorch/model/loss.py", line 78, in forward
+    if list(ft.keys()) != list(y.keys()):
+NameError: name 'F' is not defined
