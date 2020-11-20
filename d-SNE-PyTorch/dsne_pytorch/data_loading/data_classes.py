@@ -11,7 +11,9 @@ import h5py
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import (Compose, ToPILImage, ToTensor,
-                                    Resize, Normalize)
+                                    Resize, Normalize, RandomHorizontalFlip,
+                                    RandomCrop, CenterCrop)
+from .dataloader_domainnet import domainnet
 
 
 class PairDataset(Dataset):
@@ -54,7 +56,7 @@ class PairDataset(Dataset):
     """
 
     def __init__(self, src_path, tgt_path, src_num=-1, tgt_num=10,
-                 sample_ratio=3, transform=()):
+                 sample_ratio=3, transform=(), filter_num_cls=1):
         """Initialize dataset by sampling subsets of source/target.
 
         Parameters
@@ -76,24 +78,27 @@ class PairDataset(Dataset):
         """
         super().__init__()
         self.transform = transform
+        
+        if "h5" in src_path and "h5" in tgt_path:
+            with h5py.File(src_path, "r") as f_s, h5py.File(tgt_path, "r") as f_t:
+                # Read datasets from HDF5 file pointers
+                src_X, src_y = f_s["X_tr"][()], f_s["y_tr"][()]
+                tgt_X, tgt_y = f_t["X_tr"][()], f_t["y_tr"][()]
+        else :
+            src_X, src_y = domainnet(src_path, filter_num_cls=filter_num_cls, split="train")
+            tgt_X, tgt_y = domainnet(tgt_path, filter_num_cls=filter_num_cls, split="train")
+        # Sample datasets using configuration parameters
+        self.X, self.y = {}, {}
+        self.X['src'], self.y['src'] = self._resample_data(src_X, src_y,
+                                                           src_num)
+        self.X['tgt'], self.y['tgt'] = self._resample_data(tgt_X, tgt_y,
+                                                           tgt_num)
+        self.intra_idxs, self.inter_idxs = self._create_pairs(sample_ratio)
+        self.full_idxs = np.concatenate((self.intra_idxs, self.inter_idxs))
 
-        with h5py.File(src_path, "r") as f_s, h5py.File(tgt_path, "r") as f_t:
-            # Read datasets from HDF5 file pointers
-            src_X, src_y = f_s["X_tr"][()], f_s["y_tr"][()]
-            tgt_X, tgt_y = f_t["X_tr"][()], f_t["y_tr"][()]
-
-            # Sample datasets using configuration parameters
-            self.X, self.y = {}, {}
-            self.X['src'], self.y['src'] = self._resample_data(src_X, src_y,
-                                                               src_num)
-            self.X['tgt'], self.y['tgt'] = self._resample_data(tgt_X, tgt_y,
-                                                               tgt_num)
-            self.intra_idxs, self.inter_idxs = self._create_pairs(sample_ratio)
-            self.full_idxs = np.concatenate((self.intra_idxs, self.inter_idxs))
-
-            # Sort as to allow shuffling to be performed by the DataLoader
-            self.full_idxs = self.full_idxs[np.lexsort((self.full_idxs[:, 1],
-                                                        self.full_idxs[:, 0]))]
+        # Sort as to allow shuffling to be performed by the DataLoader
+        self.full_idxs = self.full_idxs[np.lexsort((self.full_idxs[:, 1],
+                                                    self.full_idxs[:, 0]))]
 
     def _resample_data(self, X, y, N):
         """Limit sampling to N instances per class."""
@@ -170,15 +175,25 @@ class SingleDataset(Dataset):
     y : PyTorch Tensor (N, 1)
         Labels corresponding to samples of source/target datasets.
     """
-    def __init__(self, data_path, suffix, transform):
+    def __init__(self, data_path, suffix, transform, filter_num_cls=1):
         """Store data and data transforms."""
         super().__init__()
         self.transform = transform
 
-        with h5py.File(data_path, "r") as f_t:
-            # Read datasets from HDF5 file pointers
-            self.X = f_t[f"X_{suffix}"][()]
-            self.y = f_t[f"y_{suffix}"][()]
+        
+        if "h5" in data_path:
+            with h5py.File(data_path, "r") as f_t:
+                # Read datasets from HDF5 file pointers
+                self.X = f_t[f"X_{suffix}"][()]
+                self.y = f_t[f"y_{suffix}"][()]
+        else :
+            if suffix == "tr":
+                suffix = "train"
+            elif suffix == "te":
+                suffix = "test"
+            self.X, self.y = domainnet(data_path, filter_num_cls=filter_num_cls, split=suffix)
+        
+        
 
     def __len__(self):
         """Reflect amount of available examples."""
@@ -205,23 +220,41 @@ class InfLoader:
 
 
 def init_dataloaders(src_path, tgt_path, src_num, tgt_num, sample_ratio,
-                     resize_dim, batch_size, shuffle):
-    transforms = Compose([
-        ToPILImage(),
-        Resize(resize_dim),
-        ToTensor(),
-        Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-
+                     resize_dim, batch_size, shuffle, crop_size=224, filter_num_cls=50):
+    if not "domainnet" in src_path and not "domainnet" in tgt_path:
+        transforms = Compose([
+            ToPILImage(),
+            Resize(resize_dim),
+            ToTensor(),
+            Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        train_transforms = transforms
+        test_transforms = transforms
+    else:
+        train_transforms = Compose([
+            ToPILImage(),
+            RandomHorizontalFlip(),
+            Resize(resize_dim),
+            RandomCrop(resize_dim),
+            ToTensor(),
+            Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])  
+        test_transforms = Compose([
+            ToPILImage(),
+            Resize(resize_dim),
+            CenterCrop(resize_dim),
+            ToTensor(),
+            Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+    
     train_dataset = PairDataset(src_path, tgt_path, src_num, tgt_num,
-                                sample_ratio, transform=transforms)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size,
-                                  shuffle=shuffle)
+                                sample_ratio, transform=train_transforms, filter_num_cls=filter_num_cls)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True, num_workers=8)
 
-    valid_dataset = SingleDataset(tgt_path, "tr", transform=transforms)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size)
+    valid_dataset = SingleDataset(tgt_path, "te", transform=test_transforms, filter_num_cls=filter_num_cls)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    test_dataset = SingleDataset(tgt_path, "te", transform=transforms)
-    test_dataloader = DataLoader(test_dataset, shuffle=shuffle)
+    test_dataset = SingleDataset(tgt_path, "te", transform=test_transforms, filter_num_cls=filter_num_cls)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
     return train_dataloader, valid_dataloader, test_dataloader

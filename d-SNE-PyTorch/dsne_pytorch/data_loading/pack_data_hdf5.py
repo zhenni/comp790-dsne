@@ -197,7 +197,7 @@ def usps(root_path):
     return dataset
 
 
-def pack_dataset(output_path, dataset):
+def pack_dataset(output_path, dataset, variable_length=False):
     """Pack image dataset into HDF5 container.
 
     Parameters
@@ -224,11 +224,16 @@ def pack_dataset(output_path, dataset):
         images = dataset[image_name]
         labels = dataset[label_name]
 
-        file.create_dataset(image_name, np.shape(images), h5py.h5t.STD_U8BE,
-                            data=images)
+        if not variable_length:
+            file.create_dataset(image_name, np.shape(images), h5py.h5t.STD_U8BE,
+                                data=images)
+        else:
+            dt = h5py.special_dtype(vlen=np.dtype('float64'))
+            file.create_dataset(image_name, (len(images),), dtype=dt)
+            file[image_name][...] = images
+            
         file.create_dataset(label_name, np.shape(labels), h5py.h5t.STD_U8BE,
-                            data=labels)
-
+                                data=labels)
     file.close()
 
 
@@ -240,7 +245,7 @@ def main(requested_datasets):
     dataset_funcs = {"mt": mnist, "mnist": mnist,
                      "mm": mnist_m, "mnistm": mnist_m, "mnist-m": mnist_m,
                      "s": svhn, "svhn": svhn,
-                     "u": usps, "usps": usps,}
+                     "u": usps, "usps": usps}
 
     for dataset in requested_datasets:
         try:

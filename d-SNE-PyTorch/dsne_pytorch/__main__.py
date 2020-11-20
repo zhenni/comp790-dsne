@@ -21,6 +21,7 @@ import torch
 from dsne_pytorch import agents, loggers, utils
 from dsne_pytorch.data_loading.data_classes import init_dataloaders
 from dsne_pytorch.model.networks import LeNetPlus
+from dsne_pytorch.model.resnet import resnet101
 from dsne_pytorch.model.loss import CombinedLoss
 from dsne_pytorch.model.metrics import MetricTracker
 
@@ -120,11 +121,15 @@ def init_objects(config):
             shuffle=config['Datasets'].getboolean('shuffle')
         )
 
-    objs["model"] = LeNetPlus(
-        input_dim=config['Model'].getint('input_dim'),
-        classes=config['Model'].getint('classes'),
-        feature_size=config['Model'].getint('feature_size'),
-        dropout=config['Model'].getfloat('dropout')
+#     objs["model"] = LeNetPlus(
+#         input_dim=config['Model'].getint('input_dim'),
+#         classes=config['Model'].getint('classes'),
+#         feature_size=config['Model'].getint('feature_size'),
+#         dropout=config['Model'].getfloat('dropout')
+#     )
+    objs["model"] = resnet101(
+        pretrained=True,
+        num_classes=config['Model'].getint('classes'),
     )
 
     objs["train_tracker"] = MetricTracker(
